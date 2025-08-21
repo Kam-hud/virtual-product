@@ -1,31 +1,35 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ShoppingCart } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useRoute } from 'vue-router'
+import api from '@/api/index.js'
 
 const router = useRouter()
 const route = useRoute()
 const quantity = ref(1)
+const product = ref({})
+const loading = ref(true)
+
+const fetchProduct = async () => {
+    try {
+        loading.value = true
+        const res = await api.get(`/products/${route.params.id}`)
+        product.value = res.data
+    } catch (error) {
+        console.error('❌ 获取商品错误:', error);
+        ElMessage.error('获取商品失败')
+        loading.value = false
+    }
+}
+
+onMounted(() => [
+    fetchProduct()
+])
 
 const goBack = () => {
     router.back()
 }
-
-const product = computed(() => {
-    return {
-        id: route.query.id,
-        name: route.query.name,
-        price: route.query.price,
-        originalPrice: route.query.originalPrice,
-        image: route.query.image,
-        categoryId: route.query.categoryId,
-        description: route.query.description,
-        details: route.query.details,
-        tag: route.query.tag,
-        rating: route.query.rating
-    }
-})
 
 const addCart = () => {
     router.push({

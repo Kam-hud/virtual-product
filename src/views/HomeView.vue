@@ -1,10 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Coin, Tickets, Goods, Picture, Download, CreditCard, RefreshRight, Service, VideoCameraFilled, Headset, Document } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import productData from '@/data/products'
-
-
+import api from '@/api/index.js'
 
 // 导入图片资源
 import banner1 from '@/assets/banners/Virtual_banner1.jpg'
@@ -47,21 +45,15 @@ const categories = ref([
     { id: 6, name: '影视', icon: 'VideoCameraFilled' },
     { id: 7, name: '音乐', icon: 'Headset' },
     { id: 8, name: '模板', icon: 'Document' },
-
 ])
 
 // 选中的分类ID
 const selectedCategory = ref(1)
-
 // 选择分类的方法
 const selectCategory = (categoryId) => {
     selectedCategory.value = categoryId
     // 这里可以添加根据分类筛选产品的逻辑
 }
-
-// 模拟产品数据
-const products = ref(productData)
-
 // 根据选中的分类筛选产品
 const filteredProducts = computed(() => {
     if (selectedCategory.value === 1) {
@@ -69,6 +61,26 @@ const filteredProducts = computed(() => {
     } else {
         return products.value.filter(product => product.categoryId === selectedCategory.value)
     }
+})
+
+const products = ref([])
+const loading = ref(true)
+
+// 从数据库中获取数据
+const fetchProducts = async () => {
+    try {
+        loading.value = true
+        const res = await api.get('/products')
+        products.value = res.data
+    } catch (error) {
+        console.error('❌ 获取商品错误:', error);
+        ElMessage.error('获取商品失败')
+        loading.value = false
+    }
+}
+
+onMounted(() => {
+    fetchProducts()
 })
 
 // 特色服务数据
@@ -107,19 +119,7 @@ const features = ref([
 const viewProductDetail = (product) => {
     // 这里可以添加跳转到产品详情页的逻辑
     router.push({
-        path: `/product/${product.id}`,
-        query: {
-            name: product.name,
-            price: product.price,
-            originalPrice: product.originalPrice,
-            image: product.image,
-            categoryId: product.categoryId,
-            description: product.description,
-            details: product.details,
-            tag: product.tag,
-            rating: product.rating
-
-        }
+        path: `/product/${product.id}`
     })
 
 }

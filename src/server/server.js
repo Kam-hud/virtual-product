@@ -219,6 +219,36 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// 获取所有商品接口
+app.get('/api/products', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM product')
+        res.json(rows)
+    } catch (error) {
+        console.error('❌ 获取商品错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 获取商品详情接口
+app.get('/api/products/:id', async (req, res) => {
+    const productId = req.params.id
+    try {
+        const [rows] = await pool.query('SELECT * FROM product WHERE id = ?', [productId])
+        if (rows.length === 0) {
+            return res.status(404).json({ message: '商品不存在' })
+        }
+        res.json(rows[0])
+    } catch (error) {
+        console.error('❌ 获取商品详情错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
 // 健康检查端点
 app.get('/api/health', (req, res) => {
     res.json({
