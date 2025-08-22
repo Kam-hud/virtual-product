@@ -4,12 +4,15 @@ import { ShoppingCart } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useRoute } from 'vue-router'
 import api from '@/api/index.js'
+import { useCartStore } from '@/stores/cart'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
 const quantity = ref(1)
 const product = ref({})
 const loading = ref(true)
+const cartStore = useCartStore()
 
 const fetchProduct = async () => {
     try {
@@ -32,9 +35,11 @@ const goBack = () => {
 }
 
 const addCart = () => {
-    router.push({
-        path: '/cart'
-    })
+    // router.push({
+    //     path: '/cart'
+    // })
+    cartStore.addItem(product.value, quantity.value)
+    ElMessage.success('已添加到购物车')
 }
 
 </script>
@@ -47,7 +52,7 @@ const addCart = () => {
                 <!-- 商品图片 -->
                 <el-col :span="12">
                     <div class="product-gallery">
-                        <el-image :src="product.image" class="main-image" fit="cover" />
+                        <el-image :src="product.image" class="main-image" />
                         <div class="thumbnails">
                             <el-image :src="product.image" class="thumbnail" />
                         </div>
@@ -66,7 +71,7 @@ const addCart = () => {
                             <div class="price-section">
                                 <span class="current-price">¥{{ product.price }}</span>
                                 <span v-if="product.originalPrice" class="original-price">¥{{ product.originalPrice
-                                }}</span>
+                                    }}</span>
                                 <el-tag type="danger" class="discount-tag">骨折</el-tag>
                             </div>
                             <div class="promotions">
@@ -160,6 +165,7 @@ const addCart = () => {
             height: 500px;
             border-radius: 8px;
             margin-bottom: 15px;
+            object-fit: contain;
             background-color: #f8f9fc;
         }
 

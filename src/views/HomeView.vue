@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { Coin, Tickets, Goods, Picture, Download, CreditCard, RefreshRight, Service, VideoCameraFilled, Headset, Document } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import api from '@/api/index.js'
+import { useCartStore } from '@/stores/cart'
+import { ElMessage } from 'element-plus'
 
 // 导入图片资源
 import banner1 from '@/assets/banners/Virtual_banner1.jpg'
@@ -124,12 +126,14 @@ const viewProductDetail = (product) => {
 
 }
 
+const cartStore = useCartStore()
 // 添加到购物车
 const addToCart = (product) => {
-    // 这里可以添加添加到购物车的逻辑
-    router.push({
-        path: '/cart'
-    })
+    // router.push({
+    //     path: '/cart'
+    // })
+    cartStore.addItem(product, 1)
+    ElMessage.success('已添加到购物车')
 }
 </script>
 
@@ -174,7 +178,7 @@ const addToCart = (product) => {
                             <div class="product-price">
                                 <span class="current-price">¥{{ product.price }}</span>
                                 <span v-if="product.originalPrice" class="original-price">¥{{ product.originalPrice
-                                }}</span>
+                                    }}</span>
                             </div>
                             <div class="product-actions">
                                 <el-button type="primary" size="small" @click.stop="addToCart(product)">
@@ -290,7 +294,8 @@ const addToCart = (product) => {
                 .product-image {
                     width: 100%;
                     height: 180px;
-                    object-fit: cover;
+                    object-fit: contain;
+                    background-color: #fff
                 }
 
                 .product-info {

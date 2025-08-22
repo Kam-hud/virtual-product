@@ -15,15 +15,6 @@ export const useUserStore = defineStore('user', {
             }
         },
 
-        // Login(userInfo) {
-        //     this.currentUser = {
-        //         ...userInfo,
-        //         avatar: userInfo.avatar || this.getDefaultAvatar()
-        //     }
-        //     localStorage.setItem('currentUser', JSON.stringify(userInfo))
-        //     ElMessage.success('登录成功')
-        // },
-
         Login(userInfo) {
             this.currentUser = {
                 id: userInfo.id,

@@ -1,8 +1,63 @@
 <script setup>
 import { ShoppingCart } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { useCartStore } from '@/stores/cart'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed } from 'vue'
+
 
 const router = useRouter()
+const cartStore = useCartStore()
+
+// 全选/取消全选
+const allSelected = computed(() => {
+    return cartStore.cartItems.length > 0 && cartStore.cartItems.every(item => item.selected)
+})
+
+const handleAllSelectionChange = (selected) => {
+    cartStore.toggleAllSelection(selected)
+}
+
+// 移除商品
+const removeItem = (item) => {
+    cartStore.removeItem(item.id)
+    ElMessage.success('商品已成功移除')
+}
+
+// 清空购物车
+const clearCart = () => {
+    ElMessageBox.confirm('确定要清空购物车吗', '提示', {
+        confirmButtonText: '确定',
+        confirmButtonText: '取消',
+        type: 'warning'
+    }).then(() => {
+        cartStore.clearCart()
+        ElMessage({
+            message: '购物车已清空',
+            type: 'success'
+        })
+    }).catch(() => { })
+}
+
+// 结算
+const checkout = () => {
+    if (cartStore.selectedCount === 0) {
+        ElMessage.warning('请选择要结算的商品')
+        return
+    }
+
+    router.push({
+        path: '/checkout'
+    })
+}
+
+// 去购物
+const goShopping = () => {
+    router.push({
+        path: '/'
+    })
+}
+
 
 </script>
 
@@ -15,66 +70,67 @@ const router = useRouter()
                 </el-icon>
                 购物车
             </h2>
-            <el-button type="text" @click="clearCart">清空购物车</el-button>
+            <el-button type="text" @click="clearCart" v-if="cartStore.cartItems.length > 0">清空购物车</el-button>
         </div>
 
-        <div>
-            <el-table style="width: 100%;">
+        <div v-if="cartStore.cartItems.length > 0">
+            <el-table :data="cartStore.cartItems" style="width: 100%;">
                 <el-table-column width="60">
-                    <template>
-                        <el-checkbox />
+                    <template #default="{ row }">
+                        <el-checkbox v-model="row.selected" />
                     </template>
                 </el-table-column>
                 <el-table-column label="商品信息" width="500">
-                    <template>
+                    <template #default="{ row }">
                         <div class="product-info">
-                            <el-image class="product-image" />
+                            <el-image class="product-image" :src="row.image" />
                             <div class="product-details">
-                                <h3 class="product-name">楠总唯一深情课程</h3>
+                                <h3 class="product-name">{{ row.name }}</h3>
                                 <div class="product-tags">
-                                    <el-tag type="info" size="small">课程</el-tag>
+                                    <el-tag type="info" size="small">{{ row.tag }}</el-tag>
                                 </div>
                             </div>
                         </div>
                     </template>
                 </el-table-column>
                 <el-table-column label="单价" width="120">
-                    <template>999</template>
+                    <template #default="{ row }">¥{{ row.price }}</template>
                 </el-table-column>
                 <el-table-column label="数量" width="150">
-                    <template>
-                        <el-input-number :min="1" :max="10" size="small" />
+                    <template #default="{ row }">
+                        <el-input-number v-model="row.quantity" :min="1" :max="10" size="small"
+                            @change="(val) => cartStore.updateQuantity(row.id, val)" />
                     </template>
                 </el-table-column>
                 <el-table-column label="小计" width="120">
-                    <template>
-                        <span class="subtotal">¥9999</span>
+                    <template #default="{ row }">
+                        <span class="subtotal">¥{{ (row.price * row.quantity).toFixed(2) }}</span>
                     </template>
                 </el-table-column>
                 <el-table-column label="操作" width="80">
-                    <template>
-                        <el-button type="danger" icon="el-icon-delete" circle size="small" />
+                    <template #default="{ row }">
+                        <el-button type="danger" icon="el-icon-delete" circle size="small" @click="removeItem(row)" />
                     </template>
                 </el-table-column>
             </el-table>
             <div class="cart-summary">
                 <div class="summary-left">
-                    <el-checkbox>全选</el-checkbox>
-                    <span class="selected-count">已选择 2 件商品</span>
+                    <el-checkbox v-model="allSelected" @change="handleAllSelectionChange">全选</el-checkbox>
+                    <span class="selected-count">已选择 {{ cartStore.selectedCount }} 件商品</span>
                 </div>
                 <div class="summary-right">
                     <div class="total">
                         <span class="label">合计：</span>
-                        <span class="amount">¥19998</span>
+                        <span class="amount">¥{{ cartStore.totalPrice }}</span>
                     </div>
                     <el-button type="danger" size="large" @click="checkout">结算</el-button>
                 </div>
             </div>
-            <div>
-                <el-empty description="您的购物车还是空的">
-                    <el-button type="primary" @click="goShopping">去逛逛</el-button>
-                </el-empty>
-            </div>
+        </div>
+        <div v-else>
+            <el-empty description="您的购物车还是空的">
+                <el-button type="primary" @click="goShopping">去逛逛</el-button>
+            </el-empty>
         </div>
     </div>
 </template>
