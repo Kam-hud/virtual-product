@@ -2,13 +2,20 @@
 import { ShoppingCart } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
+import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 
 
 const router = useRouter()
 const cartStore = useCartStore()
+const userStore = useUserStore()
 
+onMounted(() => {
+    if (userStore.isLoggedIn) {
+        cartStore.loadCart()
+    }
+})
 // 全选/取消全选
 const allSelected = computed(() => {
     return cartStore.cartItems.length > 0 && cartStore.cartItems.every(item => item.selected)

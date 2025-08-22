@@ -1,6 +1,7 @@
 // 用户模块
 import { defineStore } from "pinia";
 import { ElMessage } from 'element-plus'
+import { useCartStore } from './cart'
 
 export const useUserStore = defineStore('user', {
     state: () => ({
@@ -12,6 +13,8 @@ export const useUserStore = defineStore('user', {
             const user = localStorage.getItem('currentUser')
             if (user) {
                 this.currentUser = JSON.parse(user)
+                const cartStore = useCartStore()
+                cartStore.loadCart()
             }
         },
 
@@ -23,10 +26,17 @@ export const useUserStore = defineStore('user', {
                 avatar: userInfo.avatar || this.getDefaultAvatar()
             }
             localStorage.setItem('currentUser', JSON.stringify(this.currentUser))
+
+            // 登录后加载购物车
+            const cartStore = useCartStore()
+            cartStore.loadCart()
+
             ElMessage.success('登录成功')
         },
 
         logout() {
+            const cartStore = useCartStore()
+            cartStore.clearCart()
             localStorage.removeItem('currentUser')
             this.currentUser = null
             ElMessage.success('退出登录成功')

@@ -249,6 +249,122 @@ app.get('/api/products/:id', async (req, res) => {
     }
 })
 
+// 获取用户购物车接口
+app.get('/api/cart/:userId', async (req, res) => {
+    const userId = req.params.userId
+    try {
+        const [rows] = await pool.query('SELECT * FROM cart WHERE user_id = ?', [userId])
+        res.json(rows)
+    } catch (error) {
+        console.error('❌ 获取购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 添加商品到购物车接口
+app.post('/api/cart', async (req, res) => {
+    const { userId, productId, quantity } = req.body
+
+    if (!userId || !productId || !quantity) {
+        return res.status(400).json({ message: '请提供用户ID、商品ID和数量' })
+    }
+
+    try {
+        const [existing] = await pool.query('SELECT * FROM cart WHERE user_id = ? AND product_id = ?', [userId, productId])
+
+        if (existing.length > 0) {
+            const newQuantity = existing[0].quantity + quantity
+            await pool.query('UPDATE cart SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id])
+            res.json({ message: '购物车已更新', cartId: existing[0].id });
+        } else {
+            const [result] = await pool.query('INSERT INTO cart (user_id, product_id, quantity,selected) VALUES (?, ?, ?,?)', [userId, productId, quantity, true])
+            res.status(201).json({ message: '已添加到购物车', cartId: result.insertId })
+        }
+    } catch (error) {
+        console.error('❌ 添加到购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 更新购物车商品数量
+app.put('/api/cart/:cartId', async (req, res) => {
+    const cartId = req.params.cartId
+    const { quantity } = req.body
+
+    try {
+        await pool.query('UPDATE cart SET quantity = ? WHERE id = ?', [quantity, cartId])
+        res.json({ message: '购物车已更新' })
+
+    } catch (error) {
+        console.error('❌ 更新购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 删除购物车商品接口
+app.delete('/api/cart/:cartId', async (req, res) => {
+    const cartId = req.params.cartId
+    try {
+        await pool.query('DELETE FROM cart WHERE id = ?', [cartId])
+        res.json({ message: '购物车已删除' })
+    } catch (error) {
+        console.error('❌ 删除购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 清空购物车接口
+app.delete('/api/cart/:userId', async (req, res) => {
+    const userId = req.params.userId
+    try {
+        await pool.query('DELETE FROM cart WHERE user_id = ?', [userId])
+        res.json({ message: '购物车已清空' })
+    } catch (error) {
+        console.error('❌ 清空购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 切换购物车商品选中状态
+app.put('/api/cart/:cartId', async (req, res) => {
+    const cartId = req.params.cartId
+    const { selected } = req.body
+    try {
+        await pool.query('UPDATE cart SET selected = ? WHERE id = ?', [selected, cartId])
+        res.json({ message: '购物车已更新' })
+    } catch (error) {
+        console.error('❌ 更新购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
+// 更新购物车全选状态
+app.put('/api/cart/user/:userId/selection', async (req, res) => {
+    const userId = req.params.userId
+    const { selected } = req.body
+    try {
+        await pool.query('UPDATE cart SET selected = ? WHERE user_id = ?', [selected, userId])
+        res.json({ message: '购物车已更新' })
+    } catch (error) {
+        console.error('❌ 更新购物车错误:', error);
+        res.status(500).json({
+            message: '服务器内部错误'
+        })
+    }
+})
+
 // 健康检查端点
 app.get('/api/health', (req, res) => {
     res.json({

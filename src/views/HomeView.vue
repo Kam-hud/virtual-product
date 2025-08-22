@@ -178,7 +178,7 @@ const addToCart = (product) => {
                             <div class="product-price">
                                 <span class="current-price">¥{{ product.price }}</span>
                                 <span v-if="product.originalPrice" class="original-price">¥{{ product.originalPrice
-                                    }}</span>
+                                }}</span>
                             </div>
                             <div class="product-actions">
                                 <el-button type="primary" size="small" @click.stop="addToCart(product)">
