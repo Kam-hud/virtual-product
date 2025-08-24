@@ -4,8 +4,7 @@ import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted } from 'vue'
-
+import { computed, onMounted, ref } from 'vue'
 
 const router = useRouter()
 const cartStore = useCartStore()
@@ -14,8 +13,12 @@ const userStore = useUserStore()
 onMounted(() => {
     if (userStore.isLoggedIn) {
         cartStore.loadCart()
+    } else {
+        ElMessage.warning('请先登录查看购物车')
+        router.push('/login')
     }
 })
+
 // 全选/取消全选
 const allSelected = computed(() => {
     return cartStore.cartItems.length > 0 && cartStore.cartItems.every(item => item.selected)
@@ -35,7 +38,7 @@ const removeItem = (item) => {
 const clearCart = () => {
     ElMessageBox.confirm('确定要清空购物车吗', '提示', {
         confirmButtonText: '确定',
-        confirmButtonText: '取消',
+        cancelButtonText: '取消',
         type: 'warning'
     }).then(() => {
         cartStore.clearCart()
@@ -65,7 +68,12 @@ const goShopping = () => {
     })
 }
 
-
+// 查看商品详情
+const viewProductDetail = (productId) => {
+    router.push({
+        path: `/product/${productId}`
+    })
+}
 </script>
 
 <template>
@@ -89,29 +97,33 @@ const goShopping = () => {
                 </el-table-column>
                 <el-table-column label="商品信息" width="500">
                     <template #default="{ row }">
-                        <div class="product-info">
+                        <div class="product-info" @click="viewProductDetail(row.productId)">
                             <el-image class="product-image" :src="row.image" />
                             <div class="product-details">
-                                <h3 class="product-name">{{ row.name }}</h3>
+                                <h3 class="product-name">{{ row.name || '未知商品' }}</h3>
                                 <div class="product-tags">
-                                    <el-tag type="info" size="small">{{ row.tag }}</el-tag>
+                                    <el-tag type="info" size="small">{{ row.tag || '虚拟商品' }}</el-tag>
                                 </div>
+                                <p class="product-description" v-if="row.description">
+                                    {{ row.description.length > 50 ? row.description.substring(0, 50) + '...' :
+                                        row.description }}
+                                </p>
                             </div>
                         </div>
                     </template>
                 </el-table-column>
                 <el-table-column label="单价" width="120">
-                    <template #default="{ row }">¥{{ row.price }}</template>
+                    <template #default="{ row }">¥{{ row.price || 0 }}</template>
                 </el-table-column>
                 <el-table-column label="数量" width="150">
                     <template #default="{ row }">
-                        <el-input-number v-model="row.quantity" :min="1" :max="10" size="small"
+                        <el-input-number v-model="row.quantity" :min="1" size="small"
                             @change="(val) => cartStore.updateQuantity(row.id, val)" />
                     </template>
                 </el-table-column>
                 <el-table-column label="小计" width="120">
                     <template #default="{ row }">
-                        <span class="subtotal">¥{{ (row.price * row.quantity).toFixed(2) }}</span>
+                        <span class="subtotal">¥{{ ((row.price || 0) * row.quantity).toFixed(2) }}</span>
                     </template>
                 </el-table-column>
                 <el-table-column label="操作" width="80">
@@ -128,7 +140,7 @@ const goShopping = () => {
                 <div class="summary-right">
                     <div class="total">
                         <span class="label">合计：</span>
-                        <span class="amount">¥{{ cartStore.totalPrice }}</span>
+                        <span class="amount">¥{{ cartStore.totalPrice || '0.00' }}</span>
                     </div>
                     <el-button type="danger" size="large" @click="checkout">结算</el-button>
                 </div>
@@ -172,18 +184,34 @@ const goShopping = () => {
     .product-info {
         display: flex;
         align-items: center;
+        cursor: pointer;
+        transition: all 0.3s;
+
+        &:hover {
+            background-color: #f5f7fa;
+            border-radius: 4px;
+        }
 
         .product-image {
             width: 80px;
             height: 80px;
             margin-right: 15px;
             border-radius: 4px;
+            object-fit: cover;
         }
 
         .product-details {
             .product-name {
                 margin: 0 0 8px;
                 font-size: 16px;
+                color: #333;
+            }
+
+            .product-description {
+                margin: 8px 0 0;
+                font-size: 12px;
+                color: #666;
+                line-height: 1.4;
             }
 
             .product-tags {
@@ -241,69 +269,6 @@ const goShopping = () => {
                 width: 150px;
                 font-size: 16px;
                 font-weight: bold;
-            }
-        }
-    }
-
-    .empty-cart {
-        margin: 50px 0;
-        text-align: center;
-
-        .el-button {
-            margin-top: 20px;
-        }
-    }
-
-    .recommend-section {
-        margin-top: 40px;
-
-        h3 {
-            font-size: 20px;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .recommend-product {
-            cursor: pointer;
-            transition: transform 0.3s;
-
-            &:hover {
-                transform: translateY(-5px);
-            }
-
-            .product-image {
-                width: 100%;
-                height: 150px;
-                object-fit: cover;
-            }
-
-            .product-info {
-                padding: 15px;
-
-                .product-name {
-                    font-size: 14px;
-                    height: 40px;
-                    margin: 0 0 10px;
-                    overflow: hidden;
-                    display: -webkit-box;
-                    -webkit-box-orient: vertical;
-                }
-
-                .product-price {
-                    .current-price {
-                        font-size: 18px;
-                        font-weight: bold;
-                        color: #e74a3b;
-                        margin-right: 10px;
-                    }
-
-                    .original-price {
-                        font-size: 14px;
-                        color: #999;
-                        text-decoration: line-through;
-                    }
-                }
             }
         }
     }

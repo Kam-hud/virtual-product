@@ -18,8 +18,16 @@ export const useCartStore = defineStore('cart', () => {
         try {
             const req = await api.get(`/cart/${userStore.currentUser.id}`)
             cartItems.value = req.data.map(item => ({
-                ...item,
-                selected: true
+                id: item.id,
+                productId: item.product_id,
+                quantity: item.quantity,
+                selected: true,
+                // 商品详细信息
+                name: item.name,
+                image: item.image,
+                price: item.price,
+                tag: item.tag,
+                originalPrice: item.originalPrice,
             }))
         } catch (error) {
             console.error('加载购物车失败:', error)
