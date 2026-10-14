@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { Coin, Tickets, Goods, Picture, Download, CreditCard, RefreshRight, Service, VideoCameraFilled, Headset, Document } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Goods, Picture, Download, CreditCard, RefreshRight, Service, VideoCameraFilled, Headset, Document, Coin, Tickets } from '@element-plus/icons-vue'
+import { useRouter, useRoute } from 'vue-router'
 import api from '@/api/index.js'
+import { fallbackCategories, fallbackProducts } from '@/api/fallbackData'
 import { useCartStore } from '@/stores/cart'
 import { ElMessage } from 'element-plus'
 
@@ -13,6 +14,7 @@ import banner3 from '@/assets/banners/Virtual_banner3.jpg'
 
 // 路由
 const router = useRouter()
+const route = useRoute()
 
 const banners = ref([
     {
@@ -38,48 +40,65 @@ const banners = ref([
     }
 ])
 
-const categories = ref([
-    { id: 1, name: '全部', icon: 'Goods' },
-    { id: 2, name: '软件', icon: 'Coin' },
-    { id: 3, name: '虚拟物品', icon: 'CreditCard' },
-    { id: 4, name: '课程', icon: 'Tickets' },
-    { id: 5, name: '素材', icon: 'Picture' },
-    { id: 6, name: '影视', icon: 'VideoCameraFilled' },
-    { id: 7, name: '音乐', icon: 'Headset' },
-    { id: 8, name: '模板', icon: 'Document' },
-])
-
-// 选中的分类ID
-const selectedCategory = ref(1)
-// 选择分类的方法
-const selectCategory = (categoryId) => {
-    selectedCategory.value = categoryId
-    // 这里可以添加根据分类筛选产品的逻辑
-}
-// 根据选中的分类筛选产品
-const filteredProducts = computed(() => {
-    if (selectedCategory.value === 1) {
-        return products.value
-    } else {
-        return products.value.filter(product => product.categoryId === selectedCategory.value)
-    }
-})
-
+const categories = ref([{ id: 0, name: '全部', icon: 'Goods' }])
+const selectedCategory = ref(0)
 const products = ref([])
 const loading = ref(true)
+const isFallback = ref(false)
 
-// 从数据库中获取数据
+// 图标映射
+const iconMap = {
+    Coin, CreditCard, Tickets, Picture, VideoCameraFilled, Headset, Document, Goods, Download, RefreshRight, Service,
+}
+
+// 选择分类
+const selectCategory = (categoryId) => {
+    selectedCategory.value = categoryId
+    fetchProducts()
+}
+
+// 搜索关键词（来自路由 query）
+const keyword = computed(() => (route.query.q ? String(route.query.q).trim() : ''))
+
+// 前端本地筛选：分类 + 关键词
+const filteredProducts = computed(() => {
+    let list = products.value
+    if (selectedCategory.value !== 0) {
+        list = list.filter((product) => Number(product.categoryId) === Number(selectedCategory.value))
+    }
+    if (keyword.value) {
+        list = list.filter((product) =>
+            `${product.name} ${product.description || ''} ${product.tag || ''}`.toLowerCase().includes(keyword.value.toLowerCase())
+        )
+    }
+    return list
+})
+
+// 从后端获取分类与商品
 const fetchProducts = async () => {
     try {
         loading.value = true
-        const res = await api.get('/products')
-        products.value = res.data
+        const [catRes, prodRes] = await Promise.all([
+            api.get('/categories'),
+            api.get('/products', { params: { q: keyword.value || undefined } }),
+        ])
+        categories.value = [{ id: 0, name: '全部', icon: 'Goods' }, ...catRes.data]
+        products.value = prodRes.data
+        isFallback.value = false
     } catch (error) {
-        console.error('❌ 获取商品错误:', error);
-        ElMessage.error('获取商品失败')
+        console.warn('后端不可用，切换到静态兜底数据:', error)
+        categories.value = [{ id: 0, name: '全部', icon: 'Goods' }, ...fallbackCategories]
+        products.value = fallbackProducts
+        isFallback.value = true
+    } finally {
         loading.value = false
     }
 }
+
+// 监听路由 query 变化（Header 搜索触发）
+watch(() => route.query.q, () => {
+    fetchProducts()
+})
 
 onMounted(() => {
     fetchProducts()
@@ -119,22 +138,22 @@ const features = ref([
 
 // 查看产品详情
 const viewProductDetail = (product) => {
-    // 这里可以添加跳转到产品详情页的逻辑
     router.push({
         path: `/product/${product.id}`
     })
-
 }
 
 const cartStore = useCartStore()
 // 添加到购物车
 const addToCart = (product) => {
-    // router.push({
-    //     path: '/cart'
-    // })
+    if (isFallback.value) {
+        ElMessage.warning('演示数据不可下单，请连接后端服务')
+        return
+    }
     cartStore.addItem(product, 1)
-    ElMessage.success('已添加到购物车')
 }
+
+const categoryIcon = (icon) => iconMap[icon] || Goods
 </script>
 
 <template>
@@ -146,15 +165,18 @@ const addToCart = (product) => {
             </el-carousel-item>
         </el-carousel>
 
+        <!-- 后端离线提示 -->
+        <el-alert v-if="isFallback" type="warning" show-icon :closable="false" class="fallback-alert"
+            title="后端服务暂不可用，当前展示演示数据（仅可浏览，不可下单）" />
+
         <!-- 分类导航 -->
         <div class="category-nav">
             <el-scrollbar>
                 <div class="category-list">
                     <div v-for="category in categories" :key="category.id" class="category-item"
                         @click="selectCategory(category.id)" :class="{ active: selectedCategory === category.id }">
-                        <!-- 显示icon -->
                         <el-icon :size="32">
-                            <component :is="category.icon" />
+                            <component :is="categoryIcon(category.icon)" />
                         </el-icon>
                         <span>{{ category.name }}</span>
                     </div>
@@ -165,8 +187,8 @@ const addToCart = (product) => {
         <!-- 商品展示 -->
         <div class="product-section">
             <div class="section-header">
-                <h2>热门虚拟产品</h2>
-                <el-button type="text">查看更多</el-button>
+                <h2>{{ keyword ? `搜索"${keyword}"的结果` : '热门虚拟产品' }}</h2>
+                <span v-if="keyword" class="result-count">共 {{ filteredProducts.length }} 件商品</span>
             </div>
             <el-row :gutter="20" class="product-list">
                 <el-col v-for="product in filteredProducts" :key="product.id" :xs="12" :sm="8" :md="6"
@@ -189,6 +211,7 @@ const addToCart = (product) => {
                     </el-card>
                 </el-col>
             </el-row>
+            <el-empty v-if="!loading && filteredProducts.length === 0" description="没有找到相关商品" />
         </div>
 
         <!-- 特色服务 -->
@@ -213,6 +236,10 @@ const addToCart = (product) => {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
+
+    .fallback-alert {
+        margin: 10px 0;
+    }
 
     .banner {
         margin: 20px 0 30px;
@@ -274,6 +301,11 @@ const addToCart = (product) => {
             h2 {
                 font-size: 24px;
                 color: #333;
+            }
+
+            .result-count {
+                color: #999;
+                font-size: 14px;
             }
         }
 

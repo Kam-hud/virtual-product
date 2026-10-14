@@ -1,149 +1,231 @@
 <script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCartStore } from '@/stores/cart'
+import { useUserStore } from '@/stores/user'
+import api from '@/api/index'
 
+const router = useRouter()
 const cartStore = useCartStore()
+const userStore = useUserStore()
+
+// 流程步骤：0 确认订单 -> 1 选择支付 -> 2 支付成功
+const activeStep = ref(0)
+const paymentMethod = ref('mock')
+const submitting = ref(false)
+const orderResult = ref(null)
+
+const selectedItems = computed(() => cartStore.cartItems.filter((item) => item.selected))
+const totalPrice = computed(() => cartStore.totalPrice)
+
+// 支付方式
+const paymentMethods = [
+    { value: 'wechat', label: '微信支付', desc: '模拟支付' },
+    { value: 'alipay', label: '支付宝', desc: '模拟支付' },
+    { value: 'card', label: '银行卡', desc: '模拟支付' },
+    { value: 'mock', label: '模拟支付', desc: '演示环境，直接完成' },
+]
+
+onMounted(() => {
+    if (!userStore.isLoggedIn) {
+        ElMessage.warning('请先登录')
+        router.push('/login')
+        return
+    }
+    if (cartStore.cartItems.length === 0) {
+        cartStore.loadCart()
+    }
+})
+
+// 下一步：进入支付
+const goPay = () => {
+    if (selectedItems.value.length === 0) {
+        ElMessage.warning('没有选中的商品')
+        return
+    }
+    activeStep.value = 1
+}
+
+// 提交订单
+const submitOrder = async () => {
+    submitting.value = true
+    try {
+        const res = await api.post('/orders', {
+            paymentMethod: paymentMethod.value,
+            discountAmount: 0,
+        })
+        orderResult.value = {
+            orderId: res.data.orderId,
+            orderNo: res.data.orderNo,
+            totalAmount: Number(res.data.totalAmount || totalPrice.value),
+        }
+        activeStep.value = 2
+        ElMessage.success('订单已创建')
+    } catch (e) {
+        ElMessage.error(e.message || '下单失败，请重试')
+    } finally {
+        submitting.value = false
+    }
+}
+
+// 模拟支付
+const handlePayment = async () => {
+    if (!orderResult.value) {
+        await submitOrder()
+        return
+    }
+    try {
+        await ElMessageBox.confirm(
+            `确认支付 ¥${orderResult.value.totalAmount.toFixed(2)}（演示环境模拟支付）`,
+            '模拟支付确认',
+            { confirmButtonText: '确认支付', cancelButtonText: '取消', type: 'warning' }
+        )
+    } catch (e) {
+        return
+    }
+    submitting.value = true
+    try {
+        const res = await api.post(`/orders/${orderResult.value.orderId}/pay`)
+        orderResult.value.delivery = res.data.delivery || []
+        orderResult.value.paidAt = res.data.order?.paid_at || new Date().toLocaleString()
+        ElMessage.success('支付成功')
+    } catch (e) {
+        ElMessage.error(e.message || '支付失败，请重试')
+    } finally {
+        submitting.value = false
+    }
+}
+
+const goHome = () => router.push('/')
+const viewOrder = () => router.push('/orders')
 </script>
 
 <template>
-    <div class="checkout-pag">
+    <div class="checkout-page">
         <div class="container">
-            <el-steps :active="activeStep" align-center>
+            <el-steps :active="activeStep" align-center finish-status="success">
                 <el-step title="确认订单" />
                 <el-step title="支付订单" />
                 <el-step title="完成订单" />
             </el-steps>
 
-            <div class="checkout-content">
-                <!-- 确认订单 -->
+            <!-- 步骤1：确认订单 -->
+            <div v-if="activeStep === 0" class="checkout-content">
                 <div class="step1">
                     <div class="order-section">
                         <h3 class="section-title">订单信息</h3>
-                        <el-table style="width: 100%;">
-                            <el-table-column label="商品信息" prop="name" width="500">
+                        <el-table :data="selectedItems" style="width: 100%;">
+                            <el-table-column label="商品信息" min-width="380">
                                 <template #default="{ row }">
                                     <div class="product-info">
-                                        <el-image class="product-image" :src="row.image" />
+                                        <el-image class="product-image" :src="row.image" fit="cover" />
                                         <div class="product-details">
                                             <h4 class="product-name">{{ row.name || '虚拟商品' }}</h4>
                                             <div class="product-tags">
-                                                <el-tag size="small">{{ row.tag }}</el-tag>
+                                                <el-tag size="small">{{ row.tag || '虚拟商品' }}</el-tag>
                                             </div>
                                         </div>
                                     </div>
                                 </template>
                             </el-table-column>
-                            <el-table-column label="单价" prop="price" width="120">
-                                <template #default="{ row }">￥{{ row.price }}</template>
+                            <el-table-column label="单价" width="120">
+                                <template #default="{ row }">¥{{ row.price }}</template>
                             </el-table-column>
-                            <el-table-column label="数量" prop="quantity" width="150">
-                                <template #default="{ row }">
-                                    <el-input-number v-model="row.quantity" :min="1" :max="10" size="small" />
-                                </template>
+                            <el-table-column label="数量" width="100">
+                                <template #default="{ row }">x{{ row.quantity }}</template>
                             </el-table-column>
-                            <el-table-column label="小计" prop="subtotal" width="120">
+                            <el-table-column label="小计" width="120">
                                 <template #default="{ row }">
-                                    <span class="subtotal">￥{{ row.price * row.quantity }}</span>
+                                    <span class="subtotal">¥{{ (row.price * row.quantity).toFixed(2) }}</span>
                                 </template>
                             </el-table-column>
                         </el-table>
                     </div>
+
                     <div class="order-summary">
                         <div class="summary-card">
                             <h3 class="summary-title">订单总计</h3>
                             <div class="summary-item">
-                                <span>商品总价:</span>
-                                <span>¥{{ cartStore.totalPrice }}</span>
+                                <span>商品数量</span>
+                                <span>{{ cartStore.selectedCount }} 件</span>
                             </div>
                             <div class="summary-item">
-                                <span>优惠折扣:</span>
-                                <span class="discount">-¥{{ discountAmount }}</span>
+                                <span>商品总价</span>
+                                <span>¥{{ totalPrice }}</span>
                             </div>
                             <div class="summary-item total">
-                                <span>应付总额:</span>
-                                <span class="amount">¥{{ (cartStore.totalPrice - discountAmount) }}</span>
+                                <span>应付总额</span>
+                                <span class="amount">¥{{ totalPrice }}</span>
                             </div>
-
-                            <div class="coupon-section">
-                                <el-input v-model="couponCode" placeholder="输入优惠码" size="large">
-                                    <template #append>
-                                        <el-button @click="applyCoupon">应用</el-button>
-                                    </template>
-                                </el-input>
-                                <el-tag v-if="appliedCoupon" type="success" closable @close="removeCoupon">
-                                    已应用优惠码: {{ appliedCoupon.code }} ({{ appliedCoupon.discount * 100 }}% 折扣)
-                                </el-tag>
-                            </div>
-
-                            <el-button type="primary" size="large" class="next-btn" @click="activeStep = 2">
+                            <el-button type="primary" size="large" class="next-btn" :disabled="selectedItems.length === 0"
+                                @click="goPay">
                                 下一步：支付订单
                             </el-button>
+                            <p class="hint">演示环境使用模拟支付，不会产生真实扣款</p>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- 支付订单 -->
+            <!-- 步骤2：支付订单 -->
+            <div v-if="activeStep === 1" class="checkout-content">
                 <div class="step2">
                     <div class="payment-section">
                         <h3 class="section-title">选择支付方式</h3>
-
                         <div class="payment-methods">
-                            <el-radio-group v-model="paymentMethod">
-                                <el-radio :label="1">
-                                    <div class="payment-method">
-                                        <el-icon>
-                                            <Wechat />
-                                        </el-icon>
-                                        <span>微信支付</span>
-                                    </div>
+                            <div v-for="method in paymentMethods" :key="method.value" class="payment-method-item"
+                                :class="{ active: paymentMethod === method.value }" @click="paymentMethod = method.value">
+                                <div class="payment-method">
+                                    <span class="method-name">{{ method.label }}</span>
+                                    <span class="method-desc">{{ method.desc }}</span>
+                                </div>
+                                <el-radio :value="method.value" v-model="paymentMethod">
+                                    <span></span>
                                 </el-radio>
-                                <el-radio :label="2" border>
-                                    <div class="payment-method">
-                                        <el-icon>
-                                            <Alipay />
-                                        </el-icon>
-                                        <span>支付宝</span>
-                                    </div>
-                                </el-radio>
-                                <el-radio :label="3" border>
-                                    <div class="payment-method">
-                                        <el-icon>
-                                            <CreditCard />
-                                        </el-icon>
-                                        <span>银行卡支付</span>
-                                    </div>
-                                </el-radio>
-                                <el-radio :label="4">
-                                    <div class="payment-method">
-                                        <el-icon>
-                                            <Wallet />
-                                        </el-icon>
-                                        <!-- <span>余额支付 (¥{{ user.balance.toFixed(2) }})</span> -->
-                                    </div>
-                                </el-radio>
-                            </el-radio-group>
+                            </div>
                         </div>
 
                         <div class="payment-amount">
                             <h4>支付金额</h4>
-                            <div class="amount">¥{{ (cartStore.totalPrice - discountAmount).toFixed(2) }}</div>
+                            <div class="amount">¥{{ totalPrice }}</div>
                         </div>
 
                         <div class="action-buttons">
-                            <el-button @click="activeStep = 1">上一步</el-button>
-                            <el-button type="primary" @click="handlePayment">立即支付</el-button>
+                            <el-button size="large" @click="activeStep = 0">上一步</el-button>
+                            <el-button type="primary" size="large" :loading="submitting" @click="submitOrder">
+                                提交订单
+                            </el-button>
                         </div>
+                        <p class="hint">提交后将创建订单，可直接完成模拟支付</p>
                     </div>
                 </div>
+            </div>
 
-                <!-- 步骤3: 完成订单 -->
+            <!-- 步骤3：完成订单 -->
+            <div v-if="activeStep === 2" class="checkout-content">
                 <div class="step3">
                     <div class="success-container">
-                        <el-result icon="success" title="支付成功!" sub-title="您的订单已成功支付，商品已添加到您的账户">
+                        <el-result icon="success" title="订单已提交" :sub-title="orderResult?.delivery ? '支付成功，商品已交付' : '订单创建成功，请完成支付'">
                             <template #extra>
                                 <div class="order-info">
-                                    <p>订单号: <span>{{ orderId }}</span></p>
-                                    <p>支付金额: <span>¥{{ (cartStore.totalPrice - discountAmount).toFixed(2) }}</span></p>
-                                    <p>支付时间: <span>{{ paymentTime }}</span></p>
+                                    <p>订单号: <span>{{ orderResult?.orderNo }}</span></p>
+                                    <p>支付金额: <span>¥{{ orderResult?.totalAmount?.toFixed?.(2) ?? orderResult?.totalAmount }}</span></p>
+                                    <p v-if="orderResult?.delivery?.length">支付时间: <span>{{ orderResult?.paidAt }}</span></p>
+                                </div>
+
+                                <div v-if="orderResult?.delivery?.length" class="delivery-box">
+                                    <h4>已交付内容</h4>
+                                    <div v-for="(item, idx) in orderResult.delivery" :key="idx" class="delivery-item">
+                                        <strong>{{ item.name }}</strong>
+                                        <p>{{ item.deliveryContent || '无交付说明' }}</p>
+                                    </div>
+                                </div>
+
+                                <div v-if="!orderResult?.delivery?.length" class="pay-again">
+                                    <el-button type="primary" :loading="submitting" @click="handlePayment">
+                                        立即模拟支付
+                                    </el-button>
                                 </div>
 
                                 <div class="action-buttons">
@@ -162,6 +244,7 @@ const cartStore = useCartStore()
 <style lang="scss" scoped>
 .checkout-page {
     padding: 30px 0 50px;
+    min-height: 60vh;
 
     .el-steps {
         margin-bottom: 40px;
@@ -173,42 +256,40 @@ const cartStore = useCartStore()
         padding: 30px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
         .step1 {
             display: grid;
             grid-template-columns: 1fr 350px;
             gap: 30px;
 
-            .order-section {
-                .product-info {
-                    display: flex;
-                    align-items: center;
+            .product-info {
+                display: flex;
+                align-items: center;
 
-                    .product-image {
-                        width: 80px;
-                        height: 80px;
-                        margin-right: 15px;
-                        border-radius: 4px;
-                    }
-
-                    .product-details {
-                        .product-name {
-                            margin: 0 0 8px;
-                            font-size: 16px;
-                        }
-
-                        .product-tags {
-                            .el-tag {
-                                margin-right: 5px;
-                                margin-bottom: 5px;
-                            }
-                        }
-                    }
+                .product-image {
+                    width: 80px;
+                    height: 80px;
+                    margin-right: 15px;
+                    border-radius: 4px;
                 }
 
-                .subtotal {
-                    font-weight: bold;
-                    color: #e74a3b;
+                .product-details {
+                    .product-name {
+                        margin: 0 0 8px;
+                        font-size: 16px;
+                    }
                 }
+            }
+
+            .subtotal {
+                font-weight: bold;
+                color: #e74a3b;
             }
 
             .order-summary {
@@ -216,6 +297,8 @@ const cartStore = useCartStore()
                     background: #f8f9fc;
                     border-radius: 8px;
                     padding: 20px;
+                    position: sticky;
+                    top: 80px;
 
                     .summary-title {
                         font-size: 18px;
@@ -242,26 +325,19 @@ const cartStore = useCartStore()
                                 font-size: 22px;
                             }
                         }
-
-                        .discount {
-                            color: #1cc88a;
-                        }
-                    }
-
-                    .coupon-section {
-                        margin: 20px 0;
-
-                        .el-tag {
-                            width: 100%;
-                            margin-top: 10px;
-                            justify-content: center;
-                        }
                     }
 
                     .next-btn {
                         width: 100%;
                         font-size: 16px;
                         font-weight: 500;
+                    }
+
+                    .hint {
+                        text-align: center;
+                        color: #999;
+                        font-size: 12px;
+                        margin-top: 10px;
                     }
                 }
             }
@@ -273,39 +349,41 @@ const cartStore = useCartStore()
                 margin: 0 auto;
 
                 .payment-methods {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 15px;
                     margin-bottom: 30px;
 
-                    .el-radio-group {
-                        display: grid;
-                        grid-template-columns: repeat(2, 1fr);
-                        gap: 15px;
-                        width: 100%;
-                    }
-
-                    .el-radio {
-                        margin: 0;
-                        height: 80px;
+                    .payment-method-item {
                         display: flex;
                         align-items: center;
+                        justify-content: space-between;
+                        padding: 18px;
+                        border: 1px solid #e4e7ed;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.2s;
 
-                        :deep(.el-radio__label) {
+                        &:hover,
+                        &.active {
+                            border-color: #4e73df;
+                            background: #f0f4ff;
+                        }
+
+                        .payment-method {
                             display: flex;
-                            align-items: center;
-                        }
-                    }
+                            flex-direction: column;
 
-                    .payment-method {
-                        display: flex;
-                        align-items: center;
-                        padding: 10px;
+                            .method-name {
+                                font-size: 16px;
+                                font-weight: 500;
+                            }
 
-                        .el-icon {
-                            font-size: 30px;
-                            margin-right: 10px;
-                        }
-
-                        span {
-                            font-size: 16px;
+                            .method-desc {
+                                font-size: 12px;
+                                color: #999;
+                                margin-top: 4px;
+                            }
                         }
                     }
                 }
@@ -336,6 +414,13 @@ const cartStore = useCartStore()
                         width: 150px;
                     }
                 }
+
+                .hint {
+                    text-align: center;
+                    color: #999;
+                    font-size: 12px;
+                    margin-top: 15px;
+                }
             }
         }
 
@@ -349,12 +434,12 @@ const cartStore = useCartStore()
                     background: #f8f9fc;
                     border-radius: 8px;
                     padding: 20px;
-                    margin: 20px 0;
+                    margin-bottom: 20px;
                     text-align: left;
 
                     p {
                         margin-bottom: 10px;
-                        font-size: 16px;
+                        font-size: 15px;
 
                         span {
                             font-weight: bold;
@@ -363,11 +448,44 @@ const cartStore = useCartStore()
                     }
                 }
 
+                .delivery-box {
+                    background: #f0f9eb;
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    text-align: left;
+
+                    h4 {
+                        margin-bottom: 12px;
+                        color: #67c23a;
+                    }
+
+                    .delivery-item {
+                        padding: 8px 0;
+                        border-bottom: 1px dashed #e4e7ed;
+
+                        &:last-child {
+                            border-bottom: none;
+                        }
+
+                        p {
+                            margin: 6px 0 0;
+                            color: #666;
+                            font-size: 14px;
+                            word-break: break-all;
+                        }
+                    }
+                }
+
+                .pay-again {
+                    margin-bottom: 20px;
+                }
+
                 .action-buttons {
                     display: flex;
                     justify-content: center;
                     gap: 20px;
-                    margin-top: 30px;
+                    margin-top: 20px;
 
                     .el-button {
                         width: 150px;
@@ -387,8 +505,8 @@ const cartStore = useCartStore()
         }
     }
 
-    .step2 .payment-section .payment-methods .el-radio-group {
-        grid-template-columns: 1fr !important;
+    .step2 .payment-section .payment-methods {
+        grid-template-columns: 1fr;
     }
 }
 </style>

@@ -1,10 +1,40 @@
 <script setup>
-import { ShoppingCart } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { ShoppingCart, Search, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user';
-import { useRouter } from 'vue-router'
+import { useCartStore } from '@/stores/cart';
+import { useRouter, useRoute } from 'vue-router'
 
 const userStore = useUserStore()
+const cartStore = useCartStore()
 const router = useRouter()
+const route = useRoute()
+
+const searchKeyword = ref('')
+
+// 搜索：跳转首页并携带关键词
+const handleSearch = () => {
+    const keyword = searchKeyword.value.trim()
+    router.push({ path: '/home', query: keyword ? { q: keyword } : {} })
+}
+
+// 回车搜索
+const onSearchEnter = () => {
+    handleSearch()
+}
+
+// 购物车数量
+const cartCount = computed(() => cartStore.totalCount)
+
+onMounted(() => {
+    if (userStore.isLoggedIn && cartStore.cartItems.length === 0) {
+        cartStore.loadCart()
+    }
+    // 回填当前搜索词
+    if (route.query.q) {
+        searchKeyword.value = route.query.q
+    }
+})
 
 const logout = () => {
     userStore.logout()
@@ -20,16 +50,17 @@ const logout = () => {
             </div>
 
             <div class="search-bar">
-                <el-input v-model="searchKeyword" placeholder="搜索虚拟产品..." size="large">
+                <el-input v-model="searchKeyword" placeholder="搜索虚拟产品..." size="large" clearable
+                    @keyup.enter="onSearchEnter" @clear="handleSearch">
                     <template #append>
-                        <el-button icon="Search" />
+                        <el-button :icon="Search" @click="handleSearch" />
                     </template>
                 </el-input>
             </div>
 
             <div class="nav-buttons">
                 <el-button type="text" @click="$router.push('/cart')">
-                    <el-badge class="badge">
+                    <el-badge :value="cartCount" :hidden="cartCount === 0" class="badge">
                         <el-icon :size="24">
                             <ShoppingCart />
                         </el-icon>
@@ -44,8 +75,11 @@ const logout = () => {
                     </div>
                     <template #dropdown>
                         <el-dropdown-menu>
-                            <el-dropdown-item>个人中心</el-dropdown-item>
-                            <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
+                            <el-dropdown-item @click="$router.push('/orders')">我的订单</el-dropdown-item>
+                            <el-dropdown-item v-if="userStore.isAdmin" divided @click="$router.push('/admin')">
+                                <el-icon><Setting /></el-icon>管理后台
+                            </el-dropdown-item>
+                            <el-dropdown-item divided @click="logout">退出登录</el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>

@@ -59,26 +59,14 @@ const handleLogin = async () => {
             password: form.value.password
         });
 
-        // 登录成功后保存用户信息
-        userStore.Login({
-            id: response.data.id,
-            username: response.data.username,
-            email: response.data.email,
-            avatar: response.data.avatar
-        });
+        // 登录成功后保存 token 与用户信息
+        userStore.Login(response.data);
 
         router.push('/');
     } catch (error) {
         // 显示详细的错误信息
-        const errorMsg = error.response?.data?.message || '登录失败，请稍后再试';
+        const errorMsg = error.response?.data?.message || error.message || '登录失败，请稍后再试';
         ElMessage.error(errorMsg);
-
-        // 添加调试日志
-        console.error('登录错误详情:', {
-            request: { email: form.value.email },
-            response: error.response,
-            error
-        });
     } finally {
         loading.value = false;
     }

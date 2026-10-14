@@ -5,6 +5,8 @@ import { useRouter } from 'vue-router'
 import { useRoute } from 'vue-router'
 import api from '@/api/index.js'
 import { useCartStore } from '@/stores/cart'
+import { fallbackProducts } from '@/api/fallbackData'
+import { resolveImage } from '@/utils/image'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
@@ -12,42 +14,50 @@ const route = useRoute()
 const quantity = ref(1)
 const product = ref({})
 const loading = ref(true)
+const isFallback = ref(false)
 const cartStore = useCartStore()
 
 const fetchProduct = async () => {
     try {
         loading.value = true
         const res = await api.get(`/products/${route.params.id}`)
-        product.value = res.data
+        product.value = { ...res.data, image: resolveImage(res.data.image) }
+        isFallback.value = false
     } catch (error) {
-        console.error('❌ 获取商品错误:', error);
-        ElMessage.error('获取商品失败')
+        console.warn('后端不可用，尝试静态兜底:', error)
+        const fallback = fallbackProducts.find((p) => String(p.id) === String(route.params.id))
+        if (fallback) {
+            product.value = fallback
+            isFallback.value = true
+        } else {
+            ElMessage.error('商品不存在')
+        }
+    } finally {
         loading.value = false
     }
 }
 
-onMounted(() => [
-    fetchProduct()
-])
+onMounted(fetchProduct)
 
 const goBack = () => {
     router.back()
 }
 
 const addCart = () => {
-    // router.push({
-    //     path: '/cart'
-    // })
+    if (isFallback.value) {
+        ElMessage.warning('演示数据不可下单，请连接后端服务')
+        return
+    }
     cartStore.addItem(product.value, quantity.value)
-    ElMessage.success('已添加到购物车')
 }
-
 </script>
 
 <template>
     <div class="product-detail">
         <el-page-header @back="goBack" title="产品详情" />
-        <div class="product-container">
+        <el-alert v-if="isFallback" type="warning" show-icon :closable="false" class="fallback-alert"
+        title="后端服务暂不可用，当前展示演示数据（仅可浏览，不可下单）" />
+<div class="product-container">
             <el-row :gutter="40">
                 <!-- 商品图片 -->
                 <el-col :span="12">
@@ -66,7 +76,7 @@ const addCart = () => {
                             <div class="rating">
                                 <el-rate :model-value="product.rating" disabled show-score text-color="#ff9900"
                                     score-template="{value} 分" />
-                                <span class="sales">已售1000+</span>
+                                <span class="sales">已售{{ product.sales || 0 }}件</span>
                             </div>
                             <div class="price-section">
                                 <span class="current-price">¥{{ product.price }}</span>
@@ -144,6 +154,11 @@ const addCart = () => {
 
 <style lang="scss" scoped>
 .product-detail {
+
+    .fallback-alert {
+        margin-bottom: 15px;
+    }
+
     max-width: 1200px;
     margin: 20px auto;
     padding: 0 20px;

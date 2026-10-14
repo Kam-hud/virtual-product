@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api/index'
 import { useUserStore } from './user'
+import { resolveImage } from '@/utils/image'
 
 export const useCartStore = defineStore('cart', () => {
     const cartItems = ref([])
@@ -11,163 +12,117 @@ export const useCartStore = defineStore('cart', () => {
     const error = ref(null)
 
     const loadCart = async () => {
-        if (!userStore.isLoggedIn || !userStore.currentUser) return
+        if (!userStore.isLoggedIn) return
         isloading.value = true
         error.value = null
 
         try {
-            const req = await api.get(`/cart/${userStore.currentUser.id}`)
-            cartItems.value = req.data.map(item => ({
+            const req = await api.get('/cart')
+            cartItems.value = req.data.map((item) => ({
                 id: item.id,
-                productId: item.product_id,
+                productId: item.productId,
                 quantity: item.quantity,
-                selected: true,
-                // 商品详细信息
+                selected: item.selected !== false,
                 name: item.name,
-                image: item.image,
-                price: item.price,
+                image: resolveImage(item.image),
+                price: Number(item.price),
                 tag: item.tag,
-                originalPrice: item.originalPrice,
+                originalPrice: item.originalPrice ? Number(item.originalPrice) : null,
             }))
-        } catch (error) {
-            console.error('加载购物车失败:', error)
-            ElMessage.error('加载购物车失败')
+        } catch (e) {
+            console.error('加载购物车失败:', e)
+            error.value = e.message
+        } finally {
+            isloading.value = false
         }
     }
 
-    // 添加商品到购物车
-    // const addItem = (product, quantity = 1) => {
-    //     const existingItem = cartItems.value.find(item => item.id === product.id)
-
-    //     // 检查购物车是否已存在该商品，有商品就增加数量
-    //     if (existingItem) {
-    //         existingItem.quantity += quantity
-    //     } else {
-    //         cartItems.value.push({
-    //             ...product,
-    //             quantity,
-    //             selected: true
-    //         })
-    //     }
-    // }
-
-    // 添加商品到购物车
     const addItem = async (product, quantity = 1) => {
-
         if (!userStore.isLoggedIn) {
             ElMessage.error('请先登录')
             return
         }
-
         try {
-            const req = await api.post('/cart', {
-                userId: userStore.currentUser.id,
-                productId: product.id,
-                quantity
-            })
-            cartItems.value.push(req.data)
-        } catch (error) {
-            console.error('添加到购物车失败:', error)
-            ElMessage.error('添加到购物车失败')
+            await api.post('/cart', { productId: product.id, quantity })
+            ElMessage.success('已添加到购物车')
+            await loadCart()
+        } catch (e) {
+            console.error('添加到购物车失败:', e)
+            ElMessage.error(e.message || '添加到购物车失败')
         }
     }
 
-    // 移除商品
     const removeItem = async (cartId) => {
-        // cartItems.value = cartItems.value.filter(item => item.id !== produtId)
         try {
             await api.delete(`/cart/${cartId}`)
-            // 更新本地状态
-            cartItems.value = cartItems.value.filter(item => item.id !== cartId)
+            cartItems.value = cartItems.value.filter((item) => item.id !== cartId)
             ElMessage.success('商品已移除')
-        } catch (error) {
-            console.error('移除商品失败:', error)
-            ElMessage.error('移除商品失败')
+        } catch (e) {
+            console.error('移除商品失败:', e)
+            ElMessage.error(e.message || '移除商品失败')
         }
     }
 
-    // 更新商品数量
     const updateQuantity = async (cartId, newQuantity) => {
-        // const item = cartItems.value.find(item => item.id === productId)
-        // if (item) {
-        //     item.quantity = Math.max(1, newQuantity)
-        // }
         try {
             await api.put(`/cart/${cartId}`, { quantity: newQuantity })
-            // 更新本地状态
-            const item = cartItems.value.find(item => item.id === cartId)
-            if (item) {
-                item.quantity = Math.max(1, newQuantity)
-            }
-        } catch (error) {
-            console.error('更新数量失败:', error)
-            ElMessage.error('更新数量失败')
+            const item = cartItems.value.find((item) => item.id === cartId)
+            if (item) item.quantity = Math.max(1, newQuantity)
+        } catch (e) {
+            console.error('更新数量失败:', e)
+            ElMessage.error(e.message || '更新数量失败')
         }
     }
 
-    // 清空购物车
     const clearCart = async () => {
-        // cartItems.value = []
         if (!userStore.isLoggedIn) return
-
         try {
-            await api.delete(`/cart/user/${userStore.currentUser.id}`)
+            await api.delete('/cart')
             cartItems.value = []
             ElMessage.success('购物车已清空')
-        } catch (error) {
-            console.error('清空购物车失败:', error)
-            ElMessage.error('清空购物车失败')
+        } catch (e) {
+            console.error('清空购物车失败:', e)
+            ElMessage.error(e.message || '清空购物车失败')
         }
     }
 
-    // 切换商品选中状态
     const toggleSelection = async (cartId) => {
-        // const item = cartItems.value.find(item => item.id === productId)
-        // if (item) return item.selected = !item.selected
-        const item = cartItems.value.find(item => item.id === cartId)
-        if (item) {
-            const newSelected = !item.selected
-            item.selected = newSelected
-
-            try {
-                await api.put(`/cart/${cartId}/selection`, { selected: newSelected })
-            } catch (error) {
-                console.error('更新选中状态失败:', error)
-                // 回滚选中状态
-                item.selected = !newSelected
-                ElMessage.error('更新选中状态失败')
-            }
+        const item = cartItems.value.find((item) => item.id === cartId)
+        if (!item) return
+        const newSelected = !item.selected
+        item.selected = newSelected
+        try {
+            await api.put(`/cart/${cartId}/selection`, { selected: newSelected })
+        } catch (e) {
+            console.error('更新选中状态失败:', e)
+            item.selected = !newSelected
+            ElMessage.error(e.message || '更新选中状态失败')
         }
     }
 
-    // 全选/取消全选
     const toggleAllSelection = async (selected) => {
-        // cartItems.value.forEach(item => {
-        //     item.selected = selected
-        // })
-        cartItems.value.forEach(item => {
+        cartItems.value.forEach((item) => {
             item.selected = selected
         })
-
         try {
-            await api.put(`/cart/user/${userStore.currentUser.id}/selection`, { selected })
-        } catch (error) {
-            console.error('更新全选状态失败:', error)
-            ElMessage.error('更新全选状态失败')
+            await api.put('/cart/selection/all', { selected })
+        } catch (e) {
+            console.error('更新全选状态失败:', e)
+            ElMessage.error(e.message || '更新全选状态失败')
         }
     }
 
-    // 计算总价
     const totalPrice = computed(() => {
-        return cartItems.value.filter(item => item.selected).reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)
+        return cartItems.value
+            .filter((item) => item.selected)
+            .reduce((total, item) => total + item.price * item.quantity, 0)
+            .toFixed(2)
     })
 
-    // 选中商品数量
     const selectedCount = computed(() => {
         return cartItems.value.reduce((total, item) => total + (item.selected ? item.quantity : 0), 0)
     })
 
-    // 购物车商品总数
     const totalCount = computed(() => {
         return cartItems.value.reduce((total, item) => total + item.quantity, 0)
     })
@@ -183,6 +138,6 @@ export const useCartStore = defineStore('cart', () => {
         toggleAllSelection,
         totalPrice,
         selectedCount,
-        totalCount
+        totalCount,
     }
 })
