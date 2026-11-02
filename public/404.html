@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>VirtualStore</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="0;url=/virtual-product/">
+  <script>
+    (function () {
+      var BASE = '/virtual-product/'
+      // 保留 query 与 hash，仅将 pathname 改写为 SPA 根路径，由前端路由接管
+      var search = window.location.search || ''
+      var hash = window.location.hash || ''
+      var target = BASE + search + hash
+      var normalized = BASE.replace(/\/+$/, '')
+      if (window.location.pathname !== normalized && window.location.pathname !== BASE) {
+        window.location.replace(target)
+      }
+    })()
+  </script>
+</head>
+<body>
+  <p style="font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; text-align: center; margin-top: 18%; color: #666;">
+    页面正在跳转，请稍候…
+    <br>
+    如果未自动跳转，请 <a href="/virtual-product/">点击这里</a>。
+  </p>
+</body>
+</html>
