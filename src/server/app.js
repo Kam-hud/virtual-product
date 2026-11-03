@@ -42,7 +42,15 @@ export function createApp() {
     app.use(express.json({ limit: '2mb' }))
     app.use(express.urlencoded({ extended: true, limit: '2mb' }))
 
-    // 本地静态上传目录
+    // EdgeOne prefix restore: EdgeOne strips the /api prefix before invoking the function,
+    // restore it so backend routes match on both platforms (Vercel keeps /api).
+    app.use((req, res, next) => {
+        if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+            req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url)
+        }
+        next()
+    })
+
     if (!isServerless) {
         const uploadDir = path.resolve(process.cwd(), 'uploads')
         app.use('/uploads', express.static(uploadDir))
